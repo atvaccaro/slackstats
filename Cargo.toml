@@ -1,0 +1,6 @@
+[package]
+name = "slack-stats"
+version = "0.1.0"
+authors = ["Andrew Vaccaro <atvaccaro@gmail.com>"]
+
+[dependencies]
