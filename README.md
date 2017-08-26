@@ -1,2 +1,2 @@
-# slack-stats
+# slackstats
 Slack message analytics
