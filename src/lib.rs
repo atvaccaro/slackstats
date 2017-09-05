@@ -109,7 +109,7 @@ pub fn run(config: Config) -> Result<(), Box<error::Error>> {
 
     counts.sort_by(|a, b| b.2.cmp(&a.2));
     for (username, orig_length, unique_len) in counts {
-        println!("{}, {}, {}", username, orig_length, unique_len);
+        println!("{}, {}, {}, {:.3}", username, orig_length, unique_len, unique_len as f64 / orig_length as f64);
     }
 
     Ok(())
