@@ -9,6 +9,8 @@ use std::fs;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::io::prelude::*;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 pub fn run(config: Config) -> Result<(), Box<error::Error>> {
     /// The actual method to run the statistical analysis.
@@ -51,37 +53,52 @@ pub fn run(config: Config) -> Result<(), Box<error::Error>> {
         messages.insert(user.clone(), Vec::new());
     }
 
+    let messages_ptr = Arc::new(Mutex::new(messages));
+    let mut handles = vec![];
+
     for entry in entries {
         if entry.as_ref().unwrap().file_type().unwrap().is_file() {
             continue;
         }
 
-        let sub_paths = fs::read_dir(entry.unwrap().path()).unwrap();
+        let messages_ptr = messages_ptr.clone();
+        let handle = thread::spawn(move|| {
+            let sub_paths = fs::read_dir(entry.unwrap().path()).unwrap();
 
-        for sub_path in sub_paths {
-            let mut f = fs::File::open(sub_path.unwrap().path())?;
-            let mut contents = String::new();
-            f.read_to_string(&mut contents);
+            for sub_path in sub_paths {
+                let mut f = fs::File::open(sub_path.unwrap().path()).unwrap();
+                let mut contents = String::new();
+                f.read_to_string(&mut contents);
 
-            let v: Value = serde_json::from_str(&contents[..])?;
+                let v: Value = serde_json::from_str(&contents[..]).unwrap();
 
-            for message in v.as_array().unwrap() {
-                if message["user"].is_string()
-                    && message["text"].is_string()
-                    && message["ts"].is_string() {
-                    messages.get_mut(&String::from(message["user"].as_str().unwrap()))
-                        .unwrap()
-                        .push(
-                            Message {
-                                    user: String::from(message["user"].as_str().unwrap()),
-                                    text: String::from(message["text"].as_str().unwrap()),
-                                    timestamp: message["ts"].as_str().unwrap().parse().unwrap(),
-                                }
-                        );
+                for message in v.as_array().unwrap() {
+                    if message["user"].is_string()
+                        && message["text"].is_string()
+                        && message["ts"].is_string() {
+                        let mut messages_map = messages_ptr.lock().unwrap();
+                        (*messages_map).get_mut(&String::from(message["user"].as_str().unwrap()))
+                            .unwrap()
+                            .push(
+                                Message {
+                                        user: String::from(message["user"].as_str().unwrap()),
+                                        text: String::from(message["text"].as_str().unwrap()),
+                                        timestamp: message["ts"].as_str().unwrap().parse().unwrap(),
+                                    }
+                            );
+                    }
                 }
             }
-        }
+        });
+
+        handles.push(handle);
     }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let mut messages = *messages_ptr.lock().unwrap();
 
     //calculate total messages
     println!("Calculating total messages...");
